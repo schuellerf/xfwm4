@@ -90,6 +90,10 @@ enum {
 
 static gint compositor = COMPOSITOR_MODE_MANUAL;
 static gint vblank_method = VBLANK_AUTO;
+
+/* forward declaration for compiler */
+GQuark xfwm4_error_quark (void);
+
 #define XFWM4_ERROR      (xfwm4_error_quark ())
 
 #ifndef DEBUG
