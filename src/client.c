@@ -3464,6 +3464,8 @@ clientTile (Client *c, gint cx, gint cy, tilePositionType tile, gboolean send_co
     XWindowChanges wc;
     GdkRectangle rect;
     unsigned long old_flags;
+    int monitor_search_retry = 2; /* tiling in "a quarter" needs to search "next good monitor" twice */
+    int strange_offset = 100; /* TBD: remove me - sure has something to do with decorations or similar */
 
     g_return_val_if_fail (c != NULL, FALSE);
 
@@ -3491,11 +3493,67 @@ clientTile (Client *c, gint cx, gint cy, tilePositionType tile, gboolean send_co
 
     old_flags = c->flags;
     FLAG_UNSET (c->flags, CLIENT_FLAG_MAXIMIZED);
+
+    retry_tiling:
     if (!clientNewTileSize (c, &wc, &rect, tile))
     {
         c->flags = old_flags;
         return FALSE;
     }
+
+    TRACE ("Tiling client from %d/%d(%dx%d) to %d/%d(%dx%d)", c->x, c->y, c->width, c->height, wc.x, wc.y, wc.width, wc.height);
+    /* checking if the client was already here - this does not work for programs like xfce4-terminal which doesn't fill the full "tiling space" */
+    if ( (c->x == wc.x) && (c->y == wc.y) && (c->height == wc.height) && (c->width == wc.width) && (monitor_search_retry > 0)) {
+        monitor_search_retry --;
+        TRACE ("Client already tiled - now try to move to next monitor (%d)", monitor_search_retry);
+        switch (tile)
+        {
+            case TILE_RIGHT:
+                myScreenFindMonitorAtPoint (screen_info, wc.x + wc.width + strange_offset, wc.y, &rect);
+                break;
+            case TILE_LEFT:
+                myScreenFindMonitorAtPoint (screen_info, wc.x - strange_offset, wc.y, &rect);
+                break;
+            case TILE_UP:
+                myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y - strange_offset, &rect);
+                break;
+            case TILE_DOWN:
+                myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y + wc.height + strange_offset, &rect);
+                break;
+            case TILE_DOWN_RIGHT: /* try right, then down */
+                if (monitor_search_retry) {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x + wc.width + strange_offset, wc.y, &rect);
+                } else {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y + wc.height + strange_offset, &rect);
+                }
+            case TILE_UP_RIGHT: /* try right, then up */
+                if (monitor_search_retry) {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x + wc.width + strange_offset, wc.y, &rect);
+                } else {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y - strange_offset, &rect);
+                }
+                break;
+            case TILE_DOWN_LEFT: /* try left, then down */
+                if (monitor_search_retry) {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x - strange_offset, wc.y, &rect);
+                } else {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y + wc.height + strange_offset, &rect);
+                }
+                break;
+            case TILE_UP_LEFT: /* try left, then up */
+                if (monitor_search_retry) {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x - strange_offset, wc.y, &rect);
+                } else {
+                    myScreenFindMonitorAtPoint (screen_info, wc.x, wc.y - strange_offset, &rect);
+                }
+                break;
+            default:
+                break;
+        }
+
+        goto retry_tiling;
+    }
+
     FLAG_SET (c->flags, CLIENT_FLAG_RESTORE_SIZE_POS);
 
     c->x = wc.x;
